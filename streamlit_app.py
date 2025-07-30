@@ -1,151 +1,64 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+import joblib
+import numpy as np
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# Load your trained model
+model = joblib.load("churn_model.pkl")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+st.title("Customer Churn Prediction")
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+st.markdown("Provide the following details to predict the churn status:")
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# Example features – adjust based on your actual model input
+region = st.selectbox("Region", ['DAKAR', 'THIES', 'DIOURBEL', 'FATICK'])  # example regions
+tenure = st.selectbox("Tenure", ['0-3 month', '3-6 month', '6-9 month', '9-12 month', '12-15 month', '15-18 month', '18-21 month', '21-24 month', 'K > 24 month'])
+montant = st.number_input("Montant", min_value=0.0, step=1.0)
+frequence_rech = st.number_input("Fréquence Recharge", min_value=0.0, step=1.0)
+revenue = st.number_input("Revenue", min_value=0.0, step=1.0)
+arpu_segment = st.number_input("ARPU Segment", min_value=0.0, step=1.0)
+frequence = st.number_input("Frequence", min_value=0.0, step=1.0)
+data_volume = st.number_input("Data Volume", min_value=0.0, step=1.0)
+on_net = st.number_input("On Net", min_value=0.0, step=1.0)
+orange = st.number_input("Orange", min_value=0.0, step=1.0)
+tigo = st.number_input("Tigo", min_value=0.0, step=1.0)
+zone1 = st.number_input("Zone 1", min_value=0.0, step=1.0)
+zone2 = st.number_input("Zone 2", min_value=0.0, step=1.0)
+mrg = st.number_input("MRG", min_value=0.0, step=1.0)
+regularity = st.number_input("Regularity", min_value=0.0, step=1.0)
+top_pack = st.selectbox("Top Pack", ['NONE', 'Voice', 'Data'])  # example categories
+freq_top_pack = st.number_input("Freq Top Pack", min_value=0.0, step=1.0)
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+if st.button("Predict"):
+    # Convert categorical variables to numeric if needed (simplified example)
+    region_map = {'DAKAR': 0, 'THIES': 1, 'DIOURBEL': 2, 'FATICK': 3}
+    tenure_map = {'0-3 month': 0, '3-6 month': 1, '6-9 month': 2, '9-12 month': 3, '12-15 month': 4,
+                  '15-18 month': 5, '18-21 month': 6, '21-24 month': 7, 'K > 24 month': 8}
+    top_pack_map = {'NONE': 0, 'Voice': 1, 'Data': 2}
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+    input_data = np.array([
+        region_map[region],
+        tenure_map[tenure],
+        montant,
+        frequence_rech,
+        revenue,
+        arpu_segment,
+        frequence,
+        data_volume,
+        on_net,
+        orange,
+        tigo,
+        zone1,
+        zone2,
+        mrg,
+        regularity,
+        top_pack_map[top_pack],
+        freq_top_pack
+    ]).reshape(1, -1)
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+    # Make prediction
+    prediction = model.predict(input_data)[0]
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+    if prediction == 1:
+        st.error("Prediction: The customer is likely to **churn**.")
+    else:
+        st.success("Prediction: The customer is likely to **stay**.")
